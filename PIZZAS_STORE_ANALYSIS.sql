@@ -1,0 +1,137 @@
+CREATE database IF NOT EXISTS project1;
+USE project1;
+
+SELECT * FROM PIZZA_TYPES;
+SELECT * FROM PIZZAS;
+SELECT * FROM ORDER_DETAILS;
+SELECT * FROM ORDERS;
+
+SELECT COUNT(ORDER_ID) AS TOTAL_ORDERS FROM ORDERS;
+
+SELECT (COUNT(DISTINCT ORDER_ID)) AS TOTAL_ORDERS FROM ORDER_DETAILS;
+
+SELECT SUM(OD.QUANTITY * P.PRICE) AS TOTAL_REVENUE 
+FROM ORDER_DETAILS OD
+JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID;
+
+-- 3. Identify the highest-priced pizza.
+
+SELECT pizza_id,pizza_type_id,PRICE
+FROM pizzas
+ORDER BY PRICE DESC
+LIMIT 3;
+
+-- 4. Identify the most common pizza size ordered.
+
+SELECT P.SIZE, COUNT(*) AS TOTAL_ORDERS
+FROM ORDER_DETAILS OD
+JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID
+GROUP BY P.SIZE
+ORDER BY TOTAL_ORDERS DESC
+LIMIT 3;
+
+-- 5. List the top 5 most ordered pizza types along with their quantities.
+
+SELECT P.pizza_id, COUNT(*) AS TOTAL_ORDERS
+FROM order_details OD
+JOIN pizzas P ON OD.pizza_id = P.pizza_id
+GROUP BY P.pizza_id
+ORDER BY TOTAL_ORDERS DESC
+LIMIT 5;
+
+
+-- 6. Join the necessary tables to find the total quantity of each pizza category ordered.
+
+SELECT PT.CATEGORY, SUM(OD.QUANTITY) AS TOTAL_QUANTITY
+FROM order_details OD
+JOIN pizzas P ON OD.pizza_id = P.pizza_id
+JOIN pizza_types PT ON P.pizza_type_id = PT.pizza_type_id
+GROUP BY PT.category
+ORDER BY TOTAL_QUANTITY DESC;
+
+-- 7. Determine the distribution of orders by hour of the day.
+
+SELECT hour(O.TIME) AS ORDER_HOUR, count(*) AS TOTAL_ORDERS
+FROM ORDERS O 
+GROUP BY ORDER_HOUR
+ORDER BY ORDER_HOUR;
+
+-- 8. Join relevant tables to find the category-wise distribution of pizzas.
+
+SELECT PT.CATEGORY, count(P.PIZZA_ID) AS TOTAL_PIZZAS
+FROM pizzas P
+JOIN pizza_types PT ON P.pizza_type_id = PT.pizza_type_id
+GROUP BY PT.category
+ORDER BY TOTAL_PIZZAS DESC;
+
+-- 9. Group the orders by date and calculate the average number of pizzas ordered per day.
+
+SELECT O.DATE, SUM(OD.QUANTITY) AS TOTAL_PIZZAS
+FROM ORDERS O 
+JOIN ORDER_DETAILS OD ON O.ORDER_ID = OD.ORDER_ID
+GROUP BY O.DATE;
+
+SELECT AVG(TOTAL_PIZZAS) AS AVG_PIZZAS_PER_DAY
+FROM ( 
+		SELECT O.DATE, SUM(OD.QUANTITY) AS TOTAL_PIZZAS
+		FROM ORDERS O 
+		JOIN ORDER_DETAILS OD ON O.ORDER_ID = OD.ORDER_ID
+		GROUP BY O.DATE
+	) AS DAILY_TOTALS;
+    
+-- 10. Determine the top 3 most ordered pizza types based on revenue.
+
+SELECT PT.NAME AS PIZZA_TYPE, SUM(OD.QUANTITY * P.PRICE) AS TOTAL_REVENUE
+FROM ORDER_DETAILS OD
+JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID
+JOIN pizza_types PT ON P.pizza_type_id = PT.pizza_type_id
+GROUP BY PT.NAME
+ORDER BY TOTAL_REVENUE DESC
+LIMIT 3;
+
+-- Advanced:
+-- 11. Calculate the percentage contribution of each pizza type to total revenue.
+
+SELECT PT.NAME AS PIZZA_TYPE, 
+	round(SUM(OD.QUANTITY * P.PRICE) / (SELECT SUM(OD2.QUANTITY * P2.PRICE)
+	FROM ORDER_DETAILS OD2
+    JOIN PIZZAS P2 ON OD2.PIZZA_ID = P2.PIZZA_ID)
+    * 100, 2
+    ) AS PERCENTAGE_CONTRIBUTION 
+FROM ORDER_DETAILS OD
+JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID
+JOIN pizza_types PT ON P.pizza_type_id = PT.pizza_type_id
+GROUP BY PT.NAME
+ORDER BY PERCENTAGE_CONTRIBUTION DESC;
+
+
+-- 12. Analyze the cumulative revenue generated over time.
+
+SELECT O.DATE,
+       SUM(OD.QUANTITY * P.PRICE) AS DAILY_REVENUE,
+       SUM(SUM(OD.QUANTITY * P.PRICE)) 
+         OVER (ORDER BY O.DATE) AS CUMULATIVE_REVENUE
+FROM ORDERS O
+JOIN ORDER_DETAILS OD ON O.ORDER_ID = OD.ORDER_ID
+JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID
+GROUP BY O.DATE
+ORDER BY O.DATE;
+
+-- 13. Determine the top 3 most ordered pizza types based on revenue for each pizza category.
+
+SELECT CATEGORY, PIZZA_TYPE, TOTAL_REVENUE
+FROM (
+    SELECT PT.CATEGORY,
+           PT.NAME AS PIZZA_TYPE,
+           SUM(OD.QUANTITY * P.PRICE) AS TOTAL_REVENUE,
+           ROW_NUMBER() OVER (PARTITION BY PT.CATEGORY ORDER BY SUM(OD.QUANTITY * P.PRICE) DESC) AS RN
+    FROM ORDER_DETAILS OD
+    JOIN PIZZAS P ON OD.PIZZA_ID = P.PIZZA_ID
+    JOIN PIZZA_TYPES PT ON P.PIZZA_TYPE_ID = PT.PIZZA_TYPE_ID
+    GROUP BY PT.CATEGORY, PT.NAME
+) AS Ranked
+WHERE RN <= 3
+ORDER BY CATEGORY, TOTAL_REVENUE DESC;
+
+
+
